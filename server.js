@@ -57,7 +57,7 @@ app.post("/api/exercise/add", (req, res, next) => {
   const duration =
       Number(req.body.duration) ||
       res.send("You need to enter a valid number for the duration of exercise!");
-  let date = new Date(req.body.date);
+  let date = req.body.date && new Date(req.body.date);
   date = isNaN(date) ? new Date() : date;
 
   User.findById(userId, (error, user) => {
@@ -74,21 +74,59 @@ app.post("/api/exercise/add", (req, res, next) => {
         if (err) res.json(err);
         else
           res.json({
-            _id: newExercise._id,
+            _id: userId,
             username: user.username,
-            date: date.toDateString(),
+            date: newExercise.date.toDateString(),
             duration: duration,
             description: description
           });
       });
     }
   });
+});
 
-  // {"_id":"5efa76d70ac0510073843e3a","username":"anrannf","date":"Mon Oct 31 1994","duration":34,"description":"ex"}
+app.get("/api/exercise/users", (req, res) => {
+  User.find(null, (err, users) => {
+    if (err) res.json(err);
+    else res.json(users);
+  });
 });
 
 app.get("/api/exercise/log", (req, res) => {
-  res.json({ query: req.query });
+  // {userId}[&from][&to][&limit]
+  const userId =
+      req.query.userId || res.send("Need a user Id to query exercise logs");
+  User.findById(userId, (err, user) => {
+    if (err) res.json(err);
+    if (!user) res.json("Not a valid user id");
+    else {
+      let filter = { userId: userId };
+      const from = new Date(req.query.from);
+      const filteringFrom = from instanceof Date && !isNaN(from);
+      if (filteringFrom) filter.date = { $gte: from };
+
+      const to = new Date(req.query.to);
+      const filteringTo = to instanceof Date && !isNaN(to);
+      if (filteringTo) {
+        if (filter.date) filter.date.$lte = to;
+        else filter.date = { $lte: to };
+      }
+
+      const limit = Number(req.query.limit);
+      let query = Exercise.find(filter);
+      query = isNaN(limit) ? query:query.limit(limit);
+      query.exec((error, exercises) => {
+        if (error) res.json(error);
+        else
+          res.json({
+            userId: userId,
+            username: user.username,
+            count: exercises.length,
+            log: exercises
+          });
+      });
+    }
+  });
 });
 
 // Not found middleware
