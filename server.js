@@ -5,7 +5,21 @@ const bodyParser = require('body-parser')
 const cors = require('cors')
 
 const mongoose = require('mongoose')
-mongoose.connect(process.env.MLAB_URI || 'mongodb://localhost/exercise-track' )
+mongoose.connect(process.env.MLAB_URI || 'mongodb://localhost/exercise-track', { useNewUrlParser: true, useUnifiedTopology: true } )
+
+const Schema = mongoose.Schema;
+const userSchema = new Schema({
+  username: {type: String, required: true}
+});
+const User = mongoose.model('User', userSchema);
+
+const exerciseSchema = new Schema({
+  userId: {type: String, required: true, unique: true},
+  description:{type:String, default:""},
+  duration:{type: Number, default:30},
+  date:{type:Date, default: new Date()}
+});
+const Exercise = mongoose.model('Exercise', exerciseSchema);
 
 app.use(cors())
 
@@ -17,6 +31,25 @@ app.use(express.static('public'))
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/views/index.html')
 });
+
+app.post("/api/exercise/new-user", (req, res, next)=>{
+  const username = req.body.username;
+  User.findOne({"username":username}, (err, result)=>{
+    if(err) next(err);
+    if(!result) {
+      new User({"username":username}).save((error, {_id})=>{
+        if(error) next(err);
+        else res.json({"username":username, "_id":_id})
+      })
+    }
+    if(result) res.send("Username already taken!")
+  })
+
+})
+
+app.get("/api/exercise/log", (req,res)=>{
+  res.json({"query":req.query})
+})
 
 
 // Not found middleware
@@ -40,8 +73,11 @@ app.use((err, req, res, next) => {
     errMessage = err.message || 'Internal Server Error'
   }
   res.status(errCode).type('txt')
-    .send(errMessage)
+      .send(errMessage)
 })
+
+
+
 
 const listener = app.listen(process.env.PORT || 3000, () => {
   console.log('Your app is listening on port ' + listener.address().port)
